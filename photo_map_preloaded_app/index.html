@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>PhotoMapper3 - デモ版</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <style>
+    body { margin:0;font-family:sans-serif;}
+    #map { height:80vh;width:100%; }
+    #gallery { height:20vh; background:#f5f5f5; overflow-x:auto; white-space:nowrap; display:flex; align-items:center; padding:8px;}
+    .thumb { height:100px; margin-right:8px; cursor:pointer;}
+    .thumb:hover { outline:2px solid #007bff;}
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="gallery"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+  <script>
+    // ===== サンプル写真データ =====
+    const photoData = [
+      {fileName:"sample1.jpg", url:"images/sample1.jpg", latitude:35.7495, longitude:139.8045, dateTime:"2025-04-04T10:15"},
+      {fileName:"sample2.jpg", url:"images/sample2.jpg", latitude:35.7500, longitude:139.8060, dateTime:"2025-04-04T10:16"},
+      {fileName:"sample3.jpg", url:"images/sample3.jpg", latitude:35.7488, longitude:139.8030, dateTime:"2025-04-29T15:42"},
+      {fileName:"sample4.jpg", url:"images/sample4.jpg", latitude:35.7512, longitude:139.8075, dateTime:"2025-04-29T15:43"}
+    ];
+
+    const map = L.map('map').setView([35.749,139.805],16);
+    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',{attribution:"©地理院タイル",maxZoom:18}).addTo(map);
+
+    const gallery = document.getElementById('gallery');
+
+    // クラスタリングなし、単純マーカー枚数表示
+    const grouped = {};  // key 'lat,lng' -> array
+    const radius = 0.03; // km
+
+    function dist(a,b){const R=6371;const dLat=(b.lat-a.lat)*Math.PI/180;const dLon=(b.lng-a.lng)*Math.PI/180;
+      const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+      return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+    }
+
+    photoData.forEach(p=>{
+      let mergedKey=null;
+      for(const key in grouped){
+        const [la,lo]=key.split(',').map(Number);
+        if(dist({lat:la,lng:lo},{lat:p.latitude,lng:p.longitude})<=radius){mergedKey=key;break;}
+      }
+      if(!mergedKey){mergedKey = p.latitude.toFixed(5)+","+p.longitude.toFixed(5); grouped[mergedKey]=[];}
+      grouped[mergedKey].push(p);
+    });
+
+    for(const key in grouped){
+      const group = grouped[key];
+      const [lat,lng] = key.split(',').map(Number);
+      const size = Math.min(40,16+Math.log10(group.length+1)*10);
+      const icon = L.divIcon({html:`<div style="background:rgba(0,120,255,0.8);color:#fff;border:2px solid #fff;border-radius:50%;width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;font-weight:bold;">${group.length}</div>`,className:"",iconSize:[size,size],iconAnchor:[size/2,size/2]});
+      const m = L.marker([lat,lng],{icon}).addTo(map);
+
+      const dates = group.map(g=>new Date(g.dateTime));
+      dates.sort((a,b)=>a-b);
+      const format = d=>`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      m.bindPopup(`<strong>${group.length}枚の写真</strong><br>${format(dates[0])} - ${format(dates[dates.length-1])}`);
+
+      m.on('click',()=>{
+        gallery.innerHTML="";
+        group.forEach(p=>{
+          const img=document.createElement('img');
+          img.src=p.url;
+          img.className='thumb';
+          img.title=p.fileName;
+          gallery.appendChild(img);
+        });
+      });
+    }
+
+    // 初期表示として最初のクラスタを選択
+    const firstMarker = Object.keys(grouped)[0];
+    if(firstMarker){
+      const event = new Event('click');
+      // trigger click on first marker
+    }
+  </script>
+</body>
+</html>
